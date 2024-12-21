@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using FontForge.Parser;
+using System.Text;
 
 namespace FontForge;
 public class Sfd
@@ -7,21 +8,17 @@ public class Sfd
 
     void Deserialize(string text)
     {
-        using var parseStream = new ParserInStream(text);
-        Deserialize(parseStream);
-    }
+        var lexTokens = Lexer.ParseTokens(text);
 
-    void Deserialize(ParserInStream stream)
-    {
-
+        _ = 3;
     }
 
     public string Serialize()
     {
-
+        return null;
     }
 
-    public static Sfd FromText(string text) => new(text);
+    public static Sfd ParseText(string text) => new(text);
 }
 
 public class SfdFile : Sfd
@@ -33,5 +30,5 @@ public class SfdFile : Sfd
 
     public void Save() => File.WriteAllText(FilePath, Serialize(), Encoding.ASCII);
 
-    public static SfdFile FromFile(string filePath) => new(filePath);
+    public static SfdFile ParseFile(string filePath) => new(filePath);
 }
