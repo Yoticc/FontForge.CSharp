@@ -23,19 +23,27 @@ public unsafe static class Lexer
     static readonly LexGeneralToken[] SingleToLexKindDictiory;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static List<LexToken> ParseTokens(string text)
+    public static LexTokenList ParseTokens(string text)
         => ParseTokens(Encoding.ASCII.GetBytes(text));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static List<LexToken> ParseTokens(byte[] textBytes)
+    public static LexTokenList ParseTokens(byte[] textBytes)
     {
-        fixed (byte* pointer = textBytes)
-            return ParseTokens(pointer, textBytes.Length);
-    }
+        var contentBytes = textBytes;
+        var contentGCHandle = GCHandle.Alloc(contentBytes, GCHandleType.Pinned);
+        var contentPointer = (byte*)contentGCHandle.AddrOfPinnedObject();
+        var tokens = ParseTokens(contentPointer, contentPointer + contentBytes.Length);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static List<LexToken> ParseTokens(byte* text, int length)
-        => ParseTokens(text, text + length);
+        var tokenList = new LexTokenList()
+        {
+            ContentBytes = contentBytes,
+            ContentGCHandle = contentGCHandle,
+            ContentPointer = contentPointer,
+            Tokens = tokens
+        };
+
+        return tokenList;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static List<LexToken> ParseTokens(byte* text, byte* text_end)
@@ -78,44 +86,51 @@ public unsafe static class Lexer
             if (length == 0)
                 return;
 
-            var identifier = new string((sbyte*)startTokenBody, 0, length);
-            var token = BuildIdentifierToken(identifier);
+            var token = BuildIdentifierToken(startTokenBody, length);
             result.Add(token);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void PushGeneralToken(byte signle) => result.Add(lexKindDictiory[signle]);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        LexIdentifierToken BuildIdentifierToken(string text)
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+        LexIdentifierToken BuildIdentifierToken(byte* text, int length)
         {
+            const byte CHAR_ZERO = 0x30;
+            const byte CHAR_X = 0x78;
+            const byte CHAR_DASH = 0x2D;
+
             var pos = 0;
             var paddings = 0;
 
-            while (pos < text.Length && text[pos++] == ' ')
+            while (length > 0 && *text == ' ')
+            {
                 paddings++;
-
-            if (paddings != 0)
-                text = text.Substring(paddings);
+                text++;
+                length--;
+            }
 
             var token = new LexIdentifierToken()
             {
                 Text = text,
+                TextLength = length,
                 Padding = paddings
             };
 
-            if (pos < text.Length)
-                if (text[pos] == '0' && pos + 1 < text.Length && text[pos + 1] == 'x')
+            var textSpan = new ReadOnlySpan<byte>(text, length);
+
+            if (pos < length)
+                if (text[pos] == CHAR_ZERO && pos + 1 < length && text[pos + 1] == CHAR_X)
                 {
-                    if (long.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out long result))
+                    if (long.TryParse(textSpan, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out long result))
                     {
                         token.IsNumber = true;
                         token.IsHex = true;
                     }
                 }
-                else if (char.IsDigit(text[pos]) || (text[pos] == '-' && pos + 1 < text.Length && char.IsDigit(text[pos + 1])))
+                else if (text[pos] - CHAR_ZERO is <= 9 and >= 0)
                 {
-                    if (decimal.TryParse(text, CultureInfo.InvariantCulture, out decimal result))
+                    if (decimal.TryParse(textSpan, CultureInfo.InvariantCulture, out decimal result))
                     {
                         var isFloat = result % 1 != 0;
 

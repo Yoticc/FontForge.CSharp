@@ -8,9 +8,10 @@ public abstract class LexToken
     public override string ToString() => Kind.ToString();
 }
 
-public class LexIdentifierToken() : LexToken(LexKind.Identifier)
+public unsafe class LexIdentifierToken() : LexToken(LexKind.Identifier)
 {
-    public string Text;
+    public byte* Text;
+    public int TextLength;
     public int Padding;
     public bool IsNumber;
     public bool IsFloat;
@@ -18,7 +19,7 @@ public class LexIdentifierToken() : LexToken(LexKind.Identifier)
     public bool IsHex;
     public bool IsBoolean;
 
-    public override string ToString() => $"{base.ToString()} ({Text})";
+    public override string ToString() => $"{base.ToString()} ({new string((sbyte*)Text, 0, TextLength)})";
 }
 
 public class LexGeneralToken(LexKind kind) : LexToken(kind);
